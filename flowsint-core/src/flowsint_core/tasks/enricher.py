@@ -13,7 +13,11 @@ from ..core.enums import EventLevel
 from ..core.logger import Logger
 from ..core.models import Scan
 from ..core.postgre_db import SessionLocal, get_db
-from ..core.services import create_enricher_template_service, create_vault_service
+from ..core.services import (
+    create_enricher_service,
+    create_enricher_template_service,
+    create_vault_service,
+)
 from ..core.template_enricher import TemplateEnricher
 from ..templates.types import Template
 
@@ -56,6 +60,15 @@ def run_enricher(
 
         if not ENRICHER_REGISTRY.enricher_exists(enricher_name):
             raise ValueError(f"Enricher '{enricher_name}' not found in registry")
+
+        if owner_id:
+            enricher_service = create_enricher_service(session)
+            if not enricher_service.is_enricher_available(
+                enricher_name, uuid.UUID(owner_id), ENRICHER_REGISTRY
+            ):
+                raise ValueError(
+                    f"Enricher '{enricher_name}' is unavailable because required API keys are not configured"
+                )
 
         enricher = ENRICHER_REGISTRY.get_enricher(
             name=enricher_name,

@@ -29,7 +29,8 @@ export function useLaunchEnricher(askUser: boolean = false) {
       loading: 'Loading...',
       success: () =>
         `Enricher ${enricherName} has been launched on ${count} node${count > 1 ? 's' : ''}.`,
-      error: () => `An error occurred launching enricher.`
+      error: (error) =>
+        error instanceof Error ? error.message : 'An error occurred launching enricher.'
     })
     queryClient.invalidateQueries({
       queryKey: queryKeys.scans.list

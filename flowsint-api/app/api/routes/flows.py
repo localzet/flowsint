@@ -9,6 +9,7 @@ from flowsint_core.core.postgre_db import get_db
 from flowsint_core.core.services import (
     NotFoundError,
     PermissionDeniedError,
+    create_enricher_service,
     create_flow_service,
 )
 from flowsint_core.core.services.type_registry_service import (
@@ -80,8 +81,14 @@ def get_flows(
 
 
 @router.get("/raw_materials")
-async def get_material_list():
-    enrichers = ENRICHER_REGISTRY.list_by_categories()
+async def get_material_list(
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(get_current_user),
+):
+    enricher_service = create_enricher_service(db)
+    enrichers = enricher_service.get_enrichers_by_categories(
+        current_user.id, ENRICHER_REGISTRY
+    )
     enricher_categories = {
         category: [
             {
@@ -131,8 +138,15 @@ async def get_material_list():
 
 
 @router.get("/input_type/{input_type}")
-async def get_material_by_input_type(input_type: str):
-    enrichers = ENRICHER_REGISTRY.list_by_input_type(input_type)
+async def get_material_by_input_type(
+    input_type: str,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(get_current_user),
+):
+    enricher_service = create_enricher_service(db)
+    enrichers = enricher_service.get_enrichers(
+        input_type, current_user.id, ENRICHER_REGISTRY
+    )
     return {"items": enrichers}
 
 
@@ -215,6 +229,28 @@ async def launch_flow(
         # Compute flow branches
         nodes = [FlowNode(**node) for node in flow.flow_schema["nodes"]]
         edges = [FlowEdge(**edge) for edge in flow.flow_schema["edges"]]
+        enricher_service = create_enricher_service(db)
+        unavailable_enrichers = sorted(
+            {
+                node.data.get("name") or node.id.split("-")[0]
+                for node in nodes
+                if node.data.get("type") != "type"
+                and not enricher_service.is_enricher_available(
+                    node.data.get("name") or node.id.split("-")[0],
+                    current_user.id,
+                    ENRICHER_REGISTRY,
+                )
+            }
+        )
+
+        if unavailable_enrichers:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Flow contains unavailable enrichers. Configure required API "
+                    f"keys or remove these nodes: {', '.join(unavailable_enrichers)}"
+                ),
+            )
 
         entities = [
             entity.model_dump(mode="json", serialize_as_any=True) for entity in entities

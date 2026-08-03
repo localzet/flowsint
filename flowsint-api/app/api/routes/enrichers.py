@@ -74,6 +74,18 @@ async def launch_enricher(
                     detail=f"Enricher '{enricher_name}' not found",
                 )
             is_template = True
+        else:
+            enricher_service = create_enricher_service(db)
+            if not enricher_service.is_enricher_available(
+                enricher_name, current_user.id, ENRICHER_REGISTRY
+            ):
+                raise HTTPException(
+                    status_code=404,
+                    detail=(
+                        f"Enricher '{enricher_name}' is unavailable because "
+                        "required API keys are not configured"
+                    ),
+                )
 
         task_name = "run_template_enricher" if is_template else "run_enricher"
         task = celery.send_task(

@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
@@ -171,12 +172,15 @@ class Enricher(ABC):
                     if secret is None:
                         secret = self.vault.get_secret(param_name)
 
-                    if secret is not None:
-                        resolved[param_name] = secret
-                    elif param.get("required", False):
-                        raise Exception(
-                            f"Required vault secret '{param_name}' is missing. Please go to the Vault settings and create a '{param_name}' key."
-                        )
+                if secret is None:
+                    secret = os.getenv(param_name)
+
+                if secret is not None:
+                    resolved[param_name] = secret
+                elif param.get("required", False):
+                    raise Exception(
+                        f"Required vault secret '{param_name}' is missing. Please go to the Vault settings and create a '{param_name}' key."
+                    )
 
                 # If no vault or no secret found, use default if available
                 if param_name not in resolved and param.get("default") is not None:
